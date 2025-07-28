@@ -9,20 +9,20 @@ import React, {
   useCallback,
   useContext,
   useMemo,
-  useReducer,
-} from "react";
+  useReducer
+} from 'react';
 import {
   CartActions,
   CartContextType,
   CartItem,
-  CartState,
-} from "../types/cart.types";
-import { Product } from "../types/product.types";
+  CartState
+} from '../types/cart.types';
+import { Product } from '../types/product.types';
 import {
   calculateItemDiscount,
   calculateItemPoints,
-  calculateItemSubtotal,
-} from "../utils/calculations";
+  calculateItemSubtotal
+} from '../utils/calculations';
 
 // 초기 상태
 const initialState: CartState = {
@@ -30,117 +30,91 @@ const initialState: CartState = {
   totalPrice: 0,
   totalDiscount: 0,
   totalPoints: 0,
-  itemCount: 0,
+  itemCount: 0
 };
 
 // 액션 타입 정의
 type CartAction =
-  | { type: "ADD_TO_CART"; payload: { product: Product; quantity: number } }
-  | { type: "REMOVE_FROM_CART"; payload: { productId: string } }
+  | { type: 'ADD_TO_CART'; payload: { product: Product; quantity: number } }
+  | { type: 'REMOVE_FROM_CART'; payload: { productId: string } }
   | {
-      type: "UPDATE_QUANTITY";
+      type: 'UPDATE_QUANTITY';
       payload: { productId: string; quantity: number };
     }
-  | { type: "CLEAR_CART" }
-  | { type: "RECALCULATE_TOTALS" };
+  | { type: 'CLEAR_CART' }
+  | { type: 'RECALCULATE_TOTALS' };
 
 // Context 생성
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// 리듀서 구현
-const cartReducer = (state: CartState, action: CartAction): CartState => {
-  switch (action.type) {
-    case "ADD_TO_CART": {
-      const { product, quantity } = action.payload;
-      const existingItem = state.items.find(
-        (item) => item.product.id === product.id,
-      );
+// 선언적 헬퍼 함수들
+const createCartItem = (product: Product, quantity: number): CartItem => {
+  const item: CartItem = {
+    product,
+    quantity,
+    subtotal: 0, // 임시값, 아래에서 계산
+    discount: 0, // 임시값, 아래에서 계산
+    points: 0 // 임시값, 아래에서 계산
+  };
 
-      let newItems: CartItem[];
-      if (existingItem) {
-        // 기존 아이템 수량 업데이트
-        newItems = state.items.map((item) =>
-          item.product.id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + quantity,
-                subtotal: calculateItemSubtotal({
-                  ...item,
-                  quantity: item.quantity + quantity,
-                }),
-                discount: calculateItemDiscount({
-                  ...item,
-                  quantity: item.quantity + quantity,
-                }),
-                points: calculateItemPoints({
-                  ...item,
-                  quantity: item.quantity + quantity,
-                }),
-              }
-            : item,
-        );
-      } else {
-        // 새 아이템 추가
-        const newItem: CartItem = {
-          product,
-          quantity,
-          subtotal: calculateItemSubtotal({ product, quantity }),
-          discount: calculateItemDiscount({ product, quantity }),
-          points: calculateItemPoints({ product, quantity }),
-        };
-        newItems = [...state.items, newItem];
-      }
-
-      return calculateCartTotals(newItems);
-    }
-
-    case "REMOVE_FROM_CART": {
-      const newItems = state.items.filter(
-        (item) => item.product.id !== action.payload.productId,
-      );
-      return calculateCartTotals(newItems);
-    }
-
-    case "UPDATE_QUANTITY": {
-      const { productId, quantity } = action.payload;
-      const newItems = state.items
-        .map((item) =>
-          item.product.id === productId
-            ? {
-                ...item,
-                quantity: Math.max(0, quantity),
-                subtotal: calculateItemSubtotal({
-                  ...item,
-                  quantity: Math.max(0, quantity),
-                }),
-                discount: calculateItemDiscount({
-                  ...item,
-                  quantity: Math.max(0, quantity),
-                }),
-                points: calculateItemPoints({
-                  ...item,
-                  quantity: Math.max(0, quantity),
-                }),
-              }
-            : item,
-        )
-        .filter((item) => item.quantity > 0);
-
-      return calculateCartTotals(newItems);
-    }
-
-    case "CLEAR_CART":
-      return initialState;
-
-    case "RECALCULATE_TOTALS":
-      return calculateCartTotals(state.items);
-
-    default:
-      return state;
-  }
+  return {
+    ...item,
+    subtotal: calculateItemSubtotal(item),
+    discount: calculateItemDiscount(item),
+    points: calculateItemPoints(item)
+  };
 };
 
-// 총계 계산 함수
+const updateCartItem = (item: CartItem, newQuantity: number): CartItem => {
+  const updatedItem: CartItem = {
+    ...item,
+    quantity: newQuantity
+  };
+
+  return {
+    ...updatedItem,
+    subtotal: calculateItemSubtotal(updatedItem),
+    discount: calculateItemDiscount(updatedItem),
+    points: calculateItemPoints(updatedItem)
+  };
+};
+
+const findExistingItem = (items: CartItem[], productId: string) =>
+  items.find(item => item.product.id === productId);
+
+const updateExistingItem = (
+  items: CartItem[],
+  productId: string,
+  quantity: number
+) =>
+  items.map(item =>
+    item.product.id === productId
+      ? updateCartItem(item, item.quantity + quantity)
+      : item
+  );
+
+const addNewItem = (items: CartItem[], product: Product, quantity: number) => [
+  ...items,
+  createCartItem(product, quantity)
+];
+
+const removeItem = (items: CartItem[], productId: string) =>
+  items.filter(item => item.product.id !== productId);
+
+const updateItemQuantity = (
+  items: CartItem[],
+  productId: string,
+  quantity: number
+) =>
+  items
+    .map(item =>
+      item.product.id === productId
+        ? updateCartItem(item, Math.max(0, quantity))
+        : item
+    )
+    .filter(item => item.quantity > 0);
+
+// 총계 계산 함수 (이미 선언적)
 const calculateCartTotals = (items: CartItem[]): CartState => {
   const totalPrice = items.reduce((sum, item) => sum + item.subtotal, 0);
   const totalDiscount = items.reduce((sum, item) => sum + item.discount, 0);
@@ -152,31 +126,67 @@ const calculateCartTotals = (items: CartItem[]): CartState => {
     totalPrice,
     totalDiscount,
     totalPoints,
-    itemCount,
+    itemCount
   };
+};
+
+// 리듀서 구현 (선언적으로 개선)
+const cartReducer = (state: CartState, action: CartAction): CartState => {
+  switch (action.type) {
+    case 'ADD_TO_CART': {
+      const { product, quantity } = action.payload;
+      const existingItem = findExistingItem(state.items, product.id);
+
+      const newItems = existingItem
+        ? updateExistingItem(state.items, product.id, quantity)
+        : addNewItem(state.items, product, quantity);
+
+      return calculateCartTotals(newItems);
+    }
+
+    case 'REMOVE_FROM_CART': {
+      const newItems = removeItem(state.items, action.payload.productId);
+      return calculateCartTotals(newItems);
+    }
+
+    case 'UPDATE_QUANTITY': {
+      const { productId, quantity } = action.payload;
+      const newItems = updateItemQuantity(state.items, productId, quantity);
+      return calculateCartTotals(newItems);
+    }
+
+    case 'CLEAR_CART':
+      return initialState;
+
+    case 'RECALCULATE_TOTALS':
+      return calculateCartTotals(state.items);
+
+    default:
+      return state;
+  }
 };
 
 // Provider 컴포넌트
 export const CartProvider: React.FC<{ children: ReactNode }> = ({
-  children,
+  children
 }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
 
   // 액션 함수들 - useCallback으로 메모이제이션
   const addToCart = useCallback((product: Product, quantity: number) => {
-    dispatch({ type: "ADD_TO_CART", payload: { product, quantity } });
+    dispatch({ type: 'ADD_TO_CART', payload: { product, quantity } });
   }, []);
 
   const removeFromCart = useCallback((productId: string) => {
-    dispatch({ type: "REMOVE_FROM_CART", payload: { productId } });
+    dispatch({ type: 'REMOVE_FROM_CART', payload: { productId } });
   }, []);
 
   const updateQuantity = useCallback((productId: string, quantity: number) => {
-    dispatch({ type: "UPDATE_QUANTITY", payload: { productId, quantity } });
+    dispatch({ type: 'UPDATE_QUANTITY', payload: { productId, quantity } });
   }, []);
 
   const clearCart = useCallback(() => {
-    dispatch({ type: "CLEAR_CART" });
+    dispatch({ type: 'CLEAR_CART' });
   }, []);
 
   // Context 값 메모이제이션
@@ -186,9 +196,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
       addToCart,
       removeFromCart,
       updateQuantity,
-      clearCart,
+      clearCart
     }),
-    [state, addToCart, removeFromCart, updateQuantity, clearCart],
+    [state, addToCart, removeFromCart, updateQuantity, clearCart]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -198,7 +208,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({
 export const useCart = (): CartContextType => {
   const context = useContext(CartContext);
   if (context === undefined) {
-    throw new Error("useCart must be used within a CartProvider");
+    throw new Error('useCart must be used within a CartProvider');
   }
   return context;
 };
@@ -207,7 +217,7 @@ export const useCart = (): CartContextType => {
 export const useCartState = (): CartState => {
   const context = useContext(CartContext);
   if (context === undefined) {
-    throw new Error("useCartState must be used within a CartProvider");
+    throw new Error('useCartState must be used within a CartProvider');
   }
   const { items, totalPrice, totalDiscount, totalPoints, itemCount } = context;
   return { items, totalPrice, totalDiscount, totalPoints, itemCount };
@@ -216,7 +226,7 @@ export const useCartState = (): CartState => {
 export const useCartActions = (): CartActions => {
   const context = useContext(CartContext);
   if (context === undefined) {
-    throw new Error("useCartActions must be used within a CartProvider");
+    throw new Error('useCartActions must be used within a CartProvider');
   }
   const { addToCart, removeFromCart, updateQuantity, clearCart } = context;
   return { addToCart, removeFromCart, updateQuantity, clearCart };
