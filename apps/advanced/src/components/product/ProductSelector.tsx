@@ -33,7 +33,9 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(
       : 'w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors';
 
     return (
-      <div className='bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow'>
+      <div
+        className='bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow'
+        data-testid={`product-card-${product.id}`}>
         <div className='product-info'>
           <h3 className='text-lg font-semibold text-gray-800 mb-2'>
             {product.name}
@@ -52,7 +54,8 @@ const ProductCard: React.FC<ProductCardProps> = React.memo(
           onClick={handleAddToCart}
           disabled={isOutOfStock}
           className={buttonClass}
-          aria-label={`${product.name} 장바구니에 추가`}>
+          aria-label={`${product.name} 장바구니에 추가`}
+          data-testid={`add-to-cart-${product.id}`}>
           {buttonText}
         </button>
       </div>

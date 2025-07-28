@@ -187,7 +187,6 @@ export const OrderSummary: React.FC<OrderSummaryProps> = React.memo(
     }, [discount]);
 
     const hasSavings = savings > 0;
-    const hasPoints = points > 0;
 
     return (
       <div className='bg-gray-50 border border-gray-200 rounded-lg p-6'>
